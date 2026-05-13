@@ -17,29 +17,50 @@ reports with Apple, and recognise repeat signatures if they occur.
 | `panic-full-2026-05-13-155906.0002.panic` | `AppleCS42L84Audio` | Audio codec driver: `setPowerState(... 1→0) timed out after 15393 ms`. Cirrus Logic CS42L84 codec power-state transition hung the kernel. |
 | `panic-full-2026-05-13-220817.0002.panic` | `universalaccessd` / `AppleARMWatchdogTimer` | Watchdog timeout (90 s). macOS accessibility daemon stopped responding to the kernel watchdog. |
 | `panic-full-2026-05-13-224145.0002.panic` | `com.apple.sptm` / `AppleARMWatchdogTimer` | Watchdog timeout (94 s). Kernel was inside the Secure Page Table Monitor (SPTM) when the watchdog fired. SPTM is a recent macOS security feature on Apple Silicon and has been a known source of panics. |
-| `panic-full-2026-05-14-004542.0002.panic` | `fileproviderd` / `AppleARMWatchdogTimer` | Watchdog timeout (92 s). macOS iCloud-Drive / Files.app sync daemon stopped responding. Probably correlated with heavy git + small-file activity in the iCloud-Drive-hosted project directory; the daemon has known performance issues under such load. The proximate bug is still in Apple's kernel (a userspace daemon backing up shouldn't panic the system), but our project layout was the likely trigger. |
+| `panic-full-2026-05-14-004542.0002.panic` | `fileproviderd` / `AppleARMWatchdogTimer` | Watchdog timeout (92 s). The user reports the same crash signature reproduces with other games too — see "Updated hypothesis" below. |
 
 None of the panic backtraces contain `wgpu`, `Metal`, `AGX`, `IOSurface`, or
 any other graphics-stack driver. The FFOIE process is not on any of them.
 
-## Hypothesis on the iCloud-Drive connection
+## Updated hypothesis — macOS + games, not project-specific
 
-The May 14 panic blamed `fileproviderd` — the macOS iCloud Drive / Files.app
-sync daemon. The FFOIE project is hosted inside `~/Library/Mobile
-Documents/com~apple~CloudDocs/`, which `fileproviderd` continuously watches.
-Heavy git activity (many small object files), source-file edits, and a
-multi-megabyte `debug/` folder appearing in that path can stress
-`fileproviderd` to the point where it stops checking in with the kernel
-watchdog, which eventually panics the system.
+The same crash signature reproduces with other games on this machine, not
+just FFOIE. That rules out the project layout (iCloud Drive, our renderer,
+our input handling, etc.) as the cause.
 
-Mitigations (in increasing order of disruption):
+What unifies all five panics is **the watchdog timeout itself**. The kernel
+panics not because of the named daemon's own bug, but because no daemon
+could check in for 90+ seconds — i.e. the scheduler / interrupt path was
+globally stalled. Whichever daemon happens to be due for a check-in when
+the panic fires gets named in the log; the changing daemon name across
+panics (audio / accessibility / SPTM / fileproviderd) is consistent with
+that. They're victims, not perpetrators.
 
-- **Build artefacts already redirected** out of iCloud Drive via
-  `../.cargo/config.toml` (`target-dir = "/Users/a/.cargo-target/foie"`).
-- Consider **moving the project itself** out of iCloud Drive (e.g. to
-  `~/code/foie/`) and pushing it to the GitHub remote instead of relying on
-  iCloud for backup. iCloud + git + Rust is a documented pain point on
-  macOS.
+On Apple Silicon with games specifically, the usual suspects for this kind
+of global kernel stall are:
+
+1. **AGX (Apple GPU) driver hang** under sustained Metal command submission
+   or specific blit patterns. The driver may hang *before* it would have
+   appeared on a backtrace, so AGX doesn't always show up by name.
+2. **Pointer-lock / HID overload** — cursor grabbing combined with high
+   relative-motion event rates.
+3. **Power-state transitions** under sustained CPU+GPU load (small enclosure
+   thermal/power management, e.g. Mac mini).
+4. **macOS 26.4.1 specifically** — recent Apple Silicon kernels have had
+   more SPTM and scheduler bugs than older ones.
+
+Recommended next steps for the user (not FFOIE-side):
+
+- **Software Update**: ensure the latest macOS point release is installed.
+  Many SPTM/scheduler bugs in 26.x have been fixed incrementally.
+- **Apple Feedback Assistant**: file *one report* with all five `.panic`
+  files attached and a note that the same signature reproduces with
+  multiple games. Pattern-of-five carries more weight than isolated reports.
+- **AppleCare diagnostics**: schedule a service appointment to rule out
+  hardware (the May 13 14:39 SoC panic in particular is hardware-level).
+- **Sanity check**: try a clean test-user account, or boot in safe mode and
+  run a game. If the panic only happens in the normal account, suspect a
+  third-party kext or login item.
 
 ## How macOS writes these files
 

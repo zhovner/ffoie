@@ -187,10 +187,15 @@ name FFOIE or any graphics driver in the backtrace.** They blame, in turn:
 - `AppleCS42L84Audio` codec power-state transition timeout
 - `universalaccessd` watchdog
 - `com.apple.sptm` (Secure Page Table Monitor) watchdog
-- `fileproviderd` watchdog — likely correlated with heavy git activity
-  inside iCloud Drive (the project's current location); the daemon has
-  documented performance problems under such load. See
-  `debug/macos-panic/README.md`.
+- `fileproviderd` watchdog
+
+The same crash signature reproduces with other games on this hardware, so
+the cause is **not** project-specific. The common factor is a kernel
+watchdog timeout — whichever daemon happens to be due for a check-in gets
+named, but the underlying problem is a global kernel stall (probably AGX
+driver / power-state / SPTM bugs on Apple Silicon under sustained game
+load). See `debug/macos-panic/README.md` for the full analysis and
+recommended user-side next steps.
 
 Userspace apps cannot legitimately cause kernel panics. These should be filed
 with Apple via Feedback Assistant — see `debug/macos-panic/README.md` for
