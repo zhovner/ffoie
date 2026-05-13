@@ -75,11 +75,18 @@ Backend: **Vulkan** (falls back to OpenGL on systems without Vulkan).
    <https://aka.ms/vs/17/release/vs_BuildTools.exe> and tick the
    **"Desktop development with C++"** workload.
 
-   Verify after install (in a fresh PowerShell):
+   Verify by searching the filesystem (Build Tools does **not** add MSVC to
+   PATH — Rust finds it via the registry instead):
    ```powershell
-   where.exe link
-   # Should print: ...\VC\Tools\MSVC\14.xx\bin\Hostx64\x64\link.exe
+   Get-ChildItem "C:\Program Files\Microsoft Visual Studio","C:\Program Files (x86)\Microsoft Visual Studio" -Filter link.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 FullName
+   # Should print: ...\BuildTools\VC\Tools\MSVC\14.xx\bin\Hostx64\x64\link.exe
    ```
+   (Don't use `where.exe link` — it only searches PATH, which MSVC isn't on
+   unless you launched a "Developer" shell.)
+
+   If Rust still can't find the linker after a successful install, open
+   **"x64 Native Tools Command Prompt for VS 2022"** from the Start menu and
+   run `cargo run --release` from there — that shell has MSVC on PATH.
 
 2. Install **Rust** from <https://rustup.rs/> — accept the defaults, it picks
    `x86_64-pc-windows-msvc`.
