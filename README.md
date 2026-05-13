@@ -61,14 +61,29 @@ Backend: **Vulkan** (falls back to OpenGL on systems without Vulkan).
 
 ### Windows
 
-1. Install **Visual Studio Build Tools 2022** with the *"Desktop development
-   with C++"* workload — provides the MSVC linker used by the default Rust
-   toolchain:
-   <https://visualstudio.microsoft.com/visual-cpp-build-tools/>
-2. Install **Rust** from the official installer at <https://rustup.rs/> and
-   accept the defaults (it picks `x86_64-pc-windows-msvc`).
-3. Open a fresh PowerShell or Command Prompt (so `cargo` is on `PATH`):
-   ```bat
+1. **Install the MSVC linker** (Rust calls into it for the final link step).
+   This is the step people miss — installing Rust alone is **not enough**, you
+   will get `error: linker link.exe not found` until this is done.
+
+   Easiest, from an admin PowerShell:
+   ```powershell
+   winget install Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+   ```
+   GUI alternative: download `vs_BuildTools.exe` from
+   <https://aka.ms/vs/17/release/vs_BuildTools.exe> and tick the
+   **"Desktop development with C++"** workload.
+
+   Verify after install (in a fresh PowerShell):
+   ```powershell
+   where.exe link
+   # Should print: ...\VC\Tools\MSVC\14.xx\bin\Hostx64\x64\link.exe
+   ```
+
+2. Install **Rust** from <https://rustup.rs/> — accept the defaults, it picks
+   `x86_64-pc-windows-msvc`.
+
+3. Open a fresh PowerShell so the updated `PATH` is picked up:
+   ```powershell
    cd ffoie
    cargo run --release
    ```
