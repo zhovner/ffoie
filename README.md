@@ -1,4 +1,6 @@
 # FFOIE
+<img width="2564" height="1502" alt="23d (1)" src="https://github.com/user-attachments/assets/d85c0643-fc99-4f99-a87f-dc09947b3adc" />
+
 
 **Freaking Fast Open Interactive Environment** — a Quake-style FPS engine
 prototype focused on movement feel, low-latency input, and a sub-2-second
