@@ -187,6 +187,10 @@ name FFOIE or any graphics driver in the backtrace.** They blame, in turn:
 - `AppleCS42L84Audio` codec power-state transition timeout
 - `universalaccessd` watchdog
 - `com.apple.sptm` (Secure Page Table Monitor) watchdog
+- `fileproviderd` watchdog — likely correlated with heavy git activity
+  inside iCloud Drive (the project's current location); the daemon has
+  documented performance problems under such load. See
+  `debug/macos-panic/README.md`.
 
 Userspace apps cannot legitimately cause kernel panics. These should be filed
 with Apple via Feedback Assistant — see `debug/macos-panic/README.md` for

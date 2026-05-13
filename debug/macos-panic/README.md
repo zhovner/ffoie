@@ -17,9 +17,29 @@ reports with Apple, and recognise repeat signatures if they occur.
 | `panic-full-2026-05-13-155906.0002.panic` | `AppleCS42L84Audio` | Audio codec driver: `setPowerState(... 1→0) timed out after 15393 ms`. Cirrus Logic CS42L84 codec power-state transition hung the kernel. |
 | `panic-full-2026-05-13-220817.0002.panic` | `universalaccessd` / `AppleARMWatchdogTimer` | Watchdog timeout (90 s). macOS accessibility daemon stopped responding to the kernel watchdog. |
 | `panic-full-2026-05-13-224145.0002.panic` | `com.apple.sptm` / `AppleARMWatchdogTimer` | Watchdog timeout (94 s). Kernel was inside the Secure Page Table Monitor (SPTM) when the watchdog fired. SPTM is a recent macOS security feature on Apple Silicon and has been a known source of panics. |
+| `panic-full-2026-05-14-004542.0002.panic` | `fileproviderd` / `AppleARMWatchdogTimer` | Watchdog timeout (92 s). macOS iCloud-Drive / Files.app sync daemon stopped responding. Probably correlated with heavy git + small-file activity in the iCloud-Drive-hosted project directory; the daemon has known performance issues under such load. The proximate bug is still in Apple's kernel (a userspace daemon backing up shouldn't panic the system), but our project layout was the likely trigger. |
 
 None of the panic backtraces contain `wgpu`, `Metal`, `AGX`, `IOSurface`, or
 any other graphics-stack driver. The FFOIE process is not on any of them.
+
+## Hypothesis on the iCloud-Drive connection
+
+The May 14 panic blamed `fileproviderd` — the macOS iCloud Drive / Files.app
+sync daemon. The FFOIE project is hosted inside `~/Library/Mobile
+Documents/com~apple~CloudDocs/`, which `fileproviderd` continuously watches.
+Heavy git activity (many small object files), source-file edits, and a
+multi-megabyte `debug/` folder appearing in that path can stress
+`fileproviderd` to the point where it stops checking in with the kernel
+watchdog, which eventually panics the system.
+
+Mitigations (in increasing order of disruption):
+
+- **Build artefacts already redirected** out of iCloud Drive via
+  `../.cargo/config.toml` (`target-dir = "/Users/a/.cargo-target/foie"`).
+- Consider **moving the project itself** out of iCloud Drive (e.g. to
+  `~/code/foie/`) and pushing it to the GitHub remote instead of relying on
+  iCloud for backup. iCloud + git + Rust is a documented pain point on
+  macOS.
 
 ## How macOS writes these files
 
