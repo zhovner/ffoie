@@ -1,0 +1,20 @@
+# Cargo build output. We redirect target/ outside iCloud via
+# ../.cargo/config.toml on the dev machine, but ignore it here too in case
+# the redirect isn't in effect (clean clone, different OS, etc.).
+/target/
+**/target/
+
+# Editor / OS cruft
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Local environment files (none yet, but defensive)
+.env
+.env.local
+
+# Build artefacts that may end up alongside source on some systems
+*.pdb
+*.exe
