@@ -830,8 +830,18 @@ impl State {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle(
             Box::new(display),
         ));
+        // Create the surface *first* so we can pass it as `compatible_surface`
+        // when asking for an adapter. On the web's WebGL2 backend this is
+        // required — wgpu needs the canvas's WebGL context to construct an
+        // adapter at all. On native it's free hint that makes sure the
+        // adapter we get supports our window's surface.
+        let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions::default())
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
             .await
             .expect("no compatible GPU adapter");
         let adapter_info = adapter.get_info();
@@ -871,7 +881,6 @@ impl State {
             .expect("device request failed");
 
         let size = clamp_render_size(window.inner_size());
-        let surface = instance.create_surface(window.clone()).unwrap();
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
         let surface_format_srgb = surface_format.add_srgb_suffix();
