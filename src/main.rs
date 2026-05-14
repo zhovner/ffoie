@@ -853,8 +853,20 @@ impl State {
             println!("[ffoie] driver: {gpu_driver}");
         }
 
+        // WebGPU's *default* `max_texture_dimension_2d` is only 8192, which is
+        // smaller than the physical pixel size of large HiDPI displays.
+        // Request the adapter's actual maximum so we can create a depth
+        // attachment that matches the canvas. Native Metal/Vulkan don't have
+        // this restriction but the explicit limit is harmless there.
+        let adapter_limits = adapter.limits();
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
+            .request_device(&wgpu::DeviceDescriptor {
+                required_limits: wgpu::Limits {
+                    max_texture_dimension_2d: adapter_limits.max_texture_dimension_2d,
+                    ..wgpu::Limits::default()
+                },
+                ..Default::default()
+            })
             .await
             .expect("device request failed");
 
