@@ -4,6 +4,9 @@
 /target/
 **/target/
 
+# trunk web build output
+/dist/
+
 # Editor / OS cruft
 .DS_Store
 *.swp

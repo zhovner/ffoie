@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>FFOIE — wgpu/WebGPU prototype</title>
+    <!-- wasm-opt disabled: the wgpu/glow wasm uses bulk-memory ops which the
+         bundled wasm-opt rejects without an extra flag. Skipping it costs us
+         some binary size but the build succeeds. -->
+    <link data-trunk rel="rust" data-bin="ffoie" data-wasm-opt="0" />
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #0c0e12;
+            color: #ddd;
+            font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
+            overflow: hidden;
+            height: 100%;
+        }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas {
+            display: block;
+            outline: none;
+        }
+        /* Initial loading message shown until winit appends the <canvas>. */
+        #loading {
+            text-align: center;
+            opacity: 0.8;
+        }
+        #loading code {
+            background: #1a1d22;
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <p>FFOIE — booting WebGPU…</p>
+        <p>If this message stays, your browser doesn't support <code>WebGPU</code>.<br />
+           Try Chrome 113+, Edge 113+, Firefox 141+, or Safari 18+.</p>
+    </div>
+    <script>
+        // Hide the loading text once a canvas shows up (winit appends one
+        // after the GPU adapter is acquired).
+        const observer = new MutationObserver(() => {
+            if (document.querySelector('canvas')) {
+                const el = document.getElementById('loading');
+                if (el) el.style.display = 'none';
+                observer.disconnect();
+            }
+        });
+        observer.observe(document.body, { childList: true });
+    </script>
+</body>
+</html>

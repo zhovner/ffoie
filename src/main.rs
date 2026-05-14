@@ -8,7 +8,11 @@
 
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock};
-use std::time::{Duration, Instant};
+// `web_time` re-exports `std::time` on native and provides browser-backed
+// (`performance.now()`-based) implementations on wasm32 — where the real
+// `std::time::Instant` panics.
+use std::time::Duration;
+use web_time::Instant;
 
 use bytemuck::{Pod, Zeroable};
 use glam::{EulerRot, Mat4, Quat, Vec3};
@@ -1916,26 +1920,76 @@ fn close_menu_and_play(s: &mut State) {
 #[derive(Default)]
 struct App {
     state: Option<State>,
+    /// On wasm we can't `pollster::block_on` the async `State::new` (it'd
+    /// hang the JS event loop). Instead `resumed` kicks the init off via
+    /// `spawn_local` and stashes the result here; `window_event` adopts it
+    /// once it's ready.
+    #[cfg(target_arch = "wasm32")]
+    pending_state: std::rc::Rc<std::cell::RefCell<Option<State>>>,
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.state.is_some() {
+            return;
+        }
+        #[cfg(target_arch = "wasm32")]
+        if self.pending_state.borrow().is_some() {
+            return; // async init already in flight
+        }
+
         let attrs = Window::default_attributes()
             .with_title("FFOIE — wgpu prototype")
             .with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
         let window = Arc::new(event_loop.create_window(attrs).unwrap());
 
-        let state = pollster::block_on(State::new(
-            event_loop.owned_display_handle(),
-            window.clone(),
-        ));
-        self.state = Some(state);
-        if let Some(s) = self.state.as_ref() {
-            s.window.request_redraw();
+        // On the web, winit creates a fresh <canvas> but does NOT attach it
+        // to the DOM. Append it to <body> so it's actually visible.
+        #[cfg(target_arch = "wasm32")]
+        {
+            use winit::platform::web::WindowExtWebSys;
+            if let (Some(doc_win), Some(canvas)) = (web_sys::window(), window.canvas()) {
+                if let Some(body) = doc_win.document().and_then(|d| d.body()) {
+                    let _ = body.append_child(&canvas);
+                }
+            }
+        }
+
+        let display = event_loop.owned_display_handle();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let state = pollster::block_on(State::new(display, window.clone()));
+            self.state = Some(state);
+            if let Some(s) = self.state.as_ref() {
+                s.window.request_redraw();
+            }
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let cell = self.pending_state.clone();
+            let win_clone = window.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let state = State::new(display, win_clone).await;
+                let w = state.window.clone();
+                *cell.borrow_mut() = Some(state);
+                w.request_redraw();
+            });
         }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        // On the web, the async `State::new` may have just finished — adopt it.
+        #[cfg(target_arch = "wasm32")]
+        if self.state.is_none() {
+            if let Some(state) = self.pending_state.borrow_mut().take() {
+                self.state = Some(state);
+            } else {
+                return;
+            }
+        }
+
         let Some(state) = self.state.as_mut() else { return };
 
         // Forward to egui so it can drive its UI (mouse-over, button clicks, etc.).
@@ -2009,13 +2063,50 @@ impl ApplicationHandler for App {
     }
 }
 
+// ───────────────────────────── entry points ─────────────────────────────
+//
+// The event loop is the same on native and web — only the *bootstrap* differs:
+//   • Native binary: `fn main` is called by the OS loader.
+//   • Web (wasm32):  `run_wasm` is called by JavaScript when the page loads,
+//                    via the `#[wasm_bindgen(start)]` attribute.
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     let _ = START_TIME.set(Instant::now());
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+    run_event_loop();
+}
 
+// Cargo requires `main` on every binary; on wasm the real entry is `run_wasm`,
+// but we keep a no-op `main` to satisfy the binary-crate requirement.
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen::prelude::wasm_bindgen(start)]
+pub fn run_wasm() {
+    let _ = START_TIME.set(Instant::now());
+    console_error_panic_hook::set_once();
+    let _ = console_log::init_with_level(log::Level::Info);
+    log::info!("[ffoie] booting on wasm32 / WebGPU");
+    run_event_loop();
+}
+
+fn run_event_loop() {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = App::default();
-    event_loop.run_app(&mut app).unwrap();
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut app = App::default();
+        event_loop.run_app(&mut app).unwrap();
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        // On the web `run_app` would block the JS event loop forever.
+        // `spawn_app` returns to JS and hooks our handler into requestAnimationFrame.
+        use winit::platform::web::EventLoopExtWebSys;
+        let app = App::default();
+        event_loop.spawn_app(app);
+    }
 }
