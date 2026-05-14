@@ -1574,7 +1574,16 @@ impl State {
                     egui::Order::Foreground,
                     egui::Id::new("reticle"),
                 ));
-                let c = ctx.content_rect().center();
+                // Compute the screen centre from the framebuffer dimensions
+                // we *actually* configured the surface with (`viewport_w/h`)
+                // and egui's current scale factor. Using `ctx.content_rect()`
+                // can lag by a frame after a window resize on the web, leaving
+                // the crosshair off-centre until the next redraw.
+                let ppp = ctx.pixels_per_point().max(0.001);
+                let c = egui::pos2(
+                    viewport_w as f32 / ppp * 0.5,
+                    viewport_h as f32 / ppp * 0.5,
+                );
 
                 // ── Crosshair ──
                 let len = 7.0;
