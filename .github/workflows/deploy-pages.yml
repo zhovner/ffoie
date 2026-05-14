@@ -33,10 +33,26 @@ jobs:
         with:
           version: latest
 
-      # Build with `--public-url /<repo>/` so all asset paths resolve
-      # under the GitHub Pages sub-path (zhovner.github.io/ffoie/...).
+      # With a custom domain (CNAME file present in repo root) Pages serves
+      # from `/`; without one it serves from `/<repo>/`. Pick the right
+      # public URL for asset path resolution either way.
       - name: Build (trunk)
-        run: trunk build --release --public-url "/${{ github.event.repository.name }}/"
+        run: |
+          if [ -f CNAME ]; then
+            echo "CNAME found ($(cat CNAME)) — building for custom-domain root"
+            trunk build --release --public-url "/"
+          else
+            echo "No CNAME — building for sub-path /${REPO}/"
+            trunk build --release --public-url "/${REPO}/"
+          fi
+        env:
+          REPO: ${{ github.event.repository.name }}
+
+      # Pass CNAME through to the artifact so GH Pages routes the custom
+      # domain even when deploying via Actions (rather than "from a branch").
+      - name: Copy CNAME into dist
+        run: |
+          if [ -f CNAME ]; then cp CNAME dist/CNAME; fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
