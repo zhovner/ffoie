@@ -870,7 +870,7 @@ impl State {
             .await
             .expect("device request failed");
 
-        let size = window.inner_size();
+        let size = clamp_render_size(window.inner_size());
         let surface = instance.create_surface(window.clone()).unwrap();
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
@@ -1428,6 +1428,7 @@ impl State {
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        let new_size = clamp_render_size(new_size);
         if new_size.width == 0 || new_size.height == 0 {
             return;
         }
@@ -1867,6 +1868,30 @@ impl State {
             self.fps_timer = Instant::now();
         }
     }
+}
+
+/// Maximum render-target dimension along either axis. WebGPU's default
+/// `max_texture_dimension_2d` is 8192; some hardware tops out at 16384. With
+/// HiDPI canvases on huge displays we can blow past either. Capping the
+/// drawing buffer at 4K per side keeps allocations sane while the browser
+/// upscales the framebuffer to the canvas's CSS size — visually
+/// indistinguishable from a 1:1 render on any realistic display.
+const MAX_RENDER_DIM: u32 = 4096;
+
+/// Clamp the physical render size to `MAX_RENDER_DIM` while preserving
+/// aspect ratio.
+fn clamp_render_size(s: winit::dpi::PhysicalSize<u32>) -> winit::dpi::PhysicalSize<u32> {
+    let w = s.width.max(1);
+    let h = s.height.max(1);
+    if w <= MAX_RENDER_DIM && h <= MAX_RENDER_DIM {
+        return winit::dpi::PhysicalSize::new(w, h);
+    }
+    let longest = w.max(h) as u64;
+    let scale = MAX_RENDER_DIM as u64;
+    winit::dpi::PhysicalSize::new(
+        ((w as u64 * scale / longest) as u32).max(1),
+        ((h as u64 * scale / longest) as u32).max(1),
+    )
 }
 
 fn create_depth_view(
