@@ -6,11 +6,10 @@ rust-version = "1.87"
 publish = false
 
 [dependencies]
-# Cross-platform deps (native + web).
-# `webgl` adds a WebGL2 fallback backend used on the web when WebGPU isn't
-# available — e.g. opening the page over a LAN IP (insecure context) where
-# Chrome only exposes WebGL2. No effect on native builds.
-wgpu = { version = "29.0.0", features = ["webgl"] }
+# Cross-platform deps (native + web). WebGPU only — no WebGL2 fallback;
+# the web build serves over HTTPS (or localhost) so secure-context-gated
+# WebGPU is always available.
+wgpu = "29.0.0"
 winit = "0.30.8"
 bytemuck = { version = "1", features = ["derive"] }
 glam = { version = "0.30", features = ["bytemuck"] }
