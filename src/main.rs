@@ -827,9 +827,14 @@ struct State {
 
 impl State {
     async fn new(display: OwnedDisplayHandle, window: Arc<Window>) -> State {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle(
-            Box::new(display),
-        ));
+        // `*_from_env` so env vars (WGPU_BACKEND, WGPU_POWER_PREF,
+        // WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER, …) are honoured. The
+        // plain `new_with_display_handle` ignores them and would silently
+        // pick whatever wgpu's auto-selection wants — on Mali/Linux that's
+        // GL even when PanVK is available.
+        let instance = wgpu::Instance::new(
+            wgpu::InstanceDescriptor::new_with_display_handle_from_env(Box::new(display)),
+        );
         // Create the surface *first* so we can pass it as `compatible_surface`
         // when asking for an adapter. On the web's WebGL2 backend this is
         // required — wgpu needs the canvas's WebGL context to construct an
@@ -869,11 +874,17 @@ impl State {
         // attachment that matches the canvas. Native Metal/Vulkan don't have
         // this restriction but the explicit limit is harmless there.
         let adapter_limits = adapter.limits();
+        // `downlevel_defaults` (rather than the WebGPU-spec `default`) is the
+        // explicitly-mobile-safe baseline — it doesn't ask for things like
+        // `max_texture_dimension_3d = 2048` that PanVK on Mali-G52 can't
+        // satisfy (the GPU caps that at 512). We still bump 2D up to the
+        // adapter's own max so HiDPI displays get a depth attachment that
+        // matches the canvas.
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 required_limits: wgpu::Limits {
                     max_texture_dimension_2d: adapter_limits.max_texture_dimension_2d,
-                    ..wgpu::Limits::default()
+                    ..wgpu::Limits::downlevel_defaults()
                 },
                 ..Default::default()
             })

@@ -7,6 +7,9 @@
 # trunk web build output
 /dist/
 
+# Runtime log dumps from `./run-vulkan.sh`
+/logs/
+
 # Editor / OS cruft
 .DS_Store
 *.swp
